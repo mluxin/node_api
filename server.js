@@ -1,69 +1,93 @@
 /*
-Import
+Imports
 */
+    // NPM modules
+    require('dotenv').config(); //=> https://www.npmjs.com/package/dotenv
+    const express = require('express'); //=> https://www.npmjs.com/package/express
+    const bodyParser = require('body-parser'); //=> https://www.npmjs.com/package/body-parser
+    const cookieParser = require('cookie-parser'); //=> https://www.npmjs.com/package/cookie-parser
+    const ejs = require('ejs'); //=> https://www.npmjs.com/package/ejs
 
- // NodeJS
-  require('dotenv').config(); //=> https://www.npmjs.com/package/dotenv
-  const express = require('express'); //=> https://www.npmjs.com/package/express
-  const bodyParser = require('body-parser'); //=> https://www.npmjs.com/package/body-parser
-  const cookieParser = require('cookie-parser'); //=> https://www.npmjs.com/package/cookie-parser
-  const path = require('path'); //=> https://www.npmjs.com/package/path
-  const passport = require('passport'); //=> https://www.npmjs.com/package/passport
+    // NodeJS modules
+    const path = require('path'); //=> https://www.npmjs.com/package/path
+
+    // Inner modules
+    const MYSQLClass = require('./services/mysql.class');
+//
 
 
 /*
-Config
+Declarations
 */
-
- // Declarations
-  const server = express();
-  const port = process.env.PORT;
-
- // Server class
-    class ServerClass {
-
-    init() {
-
-    // Static path configuration
-    server.set( 'views', __dirname + '/www' );
-    server.use( express.static(path.join(__dirname, 'www')) );
-
-    //=> Body-parser
-    server.use(bodyParser.json({limit: '10mb'}));
-    server.use(bodyParser.urlencoded({ extended: true }));
-
-    //=> Use CookieParser to setup serverside cookies
-    server.use(cookieParser(process.env.COOKIE_SECRET));
-
-    // Start server
-    this.launch();
-  };
+    const server = express();
+    const port = process.env.PORT;
+//
 
 
-    routes() {
-      // Global API router
-      const ApiRouterClass = require('./routers/api.router');
-      const apiRouter = new ApiRouterClass();
-      server.use('/api', apiRouter.init())
+/*
+Server class
+*/
+    class ServerClass{
+        constructor(){
+            // Instanciate MYSQL
+            this.MYSQL = new MYSQLClass;
+        }
 
-      // Set auth router
-      const AuthRouterClass = require('./routers/auth.router');
-      const authRouter = new AuthRouterClass();
-      server.use('/api/auth', authRouter.init());
+        init(){
+            server.engine( 'html', ejs.renderFile );
+            server.set( 'view engine', 'html' );
 
-      // Set front router
-      server.get('/*',  (req, res) => res.render('index') );
-    };
+            // Static path configuration
+            server.set( 'views', __dirname + '/www' );
+            server.use( express.static(path.join(__dirname, 'www')) );
 
-    launch() {
-      // Init Routers
-      this.routes();
-      // Launch server
-      server.listen(port, () => console.log(`Server is running on port ${port}`))
-    };
-  }
+            //=> Body-parser
+            server.use(bodyParser.json({limit: '10mb'}));
+            server.use(bodyParser.urlencoded({ extended: true }));
 
-  /*
-  Start
-  */
-  new ServerClass().init();
+            //=> Use CookieParser to setup serverside cookies
+            server.use(cookieParser(process.env.COOKIE_SECRET));
+
+            // Start server configuration
+            this.config();
+        };
+
+        config(){
+            // Connect the DB
+            this.MYSQL.connectDb()
+            .then( connection => {
+                // Set global API router
+                const ApiRouterClass = require('./routers/api.router');
+                const apiRouter = new ApiRouterClass(connection);
+                server.use('/api', apiRouter.init());
+
+                // Set auth router
+                const AuthRouterClass = require('./routers/auth.router');
+                const authRouter = new AuthRouterClass(connection);
+                server.use('/api/auth', authRouter.init());
+
+                // Set front router
+                server.get('/*',  (req, res) => res.render('index') );
+
+                // Launch server
+                this.launch();
+            })
+            .catch( connectionError => {
+                console.log(`MYsql connection error: ${connectionError}`)
+            })
+        };
+
+        launch(){
+            server.listen(port, () => {
+                console.log(`Server is running: http://localhost:${port}`)
+            })
+        };
+    }
+//
+
+/*
+Start server
+*/
+    const NODEapi_boilerplate = new ServerClass();
+    NODEapi_boilerplate.init();
+//
